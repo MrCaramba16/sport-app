@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="de">
 <head>
 <meta charset="utf-8">
@@ -121,9 +121,9 @@
     <h2>So funktioniert dein Plan</h2>
     <div class="small" style="line-height:1.5">
       Empfehlung für Erwachsene: rund <b>150 Minuten Bewegung pro Woche</b> plus <b>2× Kräftigung</b>.<br><br>
-      Du startest klein mit <b>3 Einheiten à ca. 20 Minuten</b>. Schaffst du dein Wochenziel, steigst du eine Stufe auf:
-      längere Belastung, kürzere Pausen, mehr Laufanteil. Ab Stufe 3 sind es 4 Einheiten pro Woche.<br><br>
-      Bei gutem Wetter geht's raus (Geh-Lauf-Intervalle), sonst trainierst du drinnen ohne Geräte.
+      Dein Wochenziel zählt in <b>Minuten</b>: Du startest mit <b>90 Minuten</b> und steigerst dich bis <b>300 Minuten</b>. Schaffst du das Ziel, steigst du eine Stufe auf:
+      längere Einheiten, längere zügige Gehphasen, kürzere Pausen.<br><br>
+      Bei gutem Wetter geht's raus zum zügigen Gehen oder Nordic Walking, rückenschonend ohne Laufen. Sonst trainierst du drinnen ohne Geräte.
       Andere Aktivitäten wie Radfahren oder Wandern kannst du unter „Eintragen“ erfassen, sie zählen mit.
     </div>
   </div>
@@ -280,6 +280,8 @@ const ANIM = {
                            [55,17, 53,27, 48,52, 58,38, 64,32, 42,40, 46,48, 44,70, 32,78, 62,62, 58,80]] },
   stretch:   { ms:3200, f:[[50,16, 50,26, 50,52, 45,14, 46,3, 55,14, 54,3, 46,71, 45,90, 54,71, 55,90],
                            [42,18, 46,27, 50,52, 38,16, 32,6, 46,14, 38,4, 46,71, 45,90, 54,71, 55,90]] },
+  brisk:     { ms:750, f:[[53,16, 52,26, 50,52, 45,38, 40,47, 57,37, 63,44, 57,71, 59,90, 45,71, 40,89],
+                           [53,16, 52,26, 50,52, 57,37, 63,44, 45,38, 40,47, 45,71, 40,89, 57,71, 59,90]] },
   stepjack:  { ms:1400, f:[STAND_F, [50,16, 50,26, 50,52, 41,16, 36,4, 59,16, 64,4, 42,70, 34,89, 54,71, 55,90]] },
   wallpush:  { ms:2000, wall:'R', f:[[59,22, 57,32, 46,58, 66,33, 74,34, 66,34, 74,35, 43,74, 39,90, 42,74, 38,90],
                            [64,26, 63,35, 49,59, 64,46, 74,34, 64,47, 74,35, 44,74, 39,90, 43,74, 38,90]] },
@@ -314,7 +316,8 @@ requestAnimationFrame(animLoop);
 
 /* ================= Plan / Stufen ================= */
 const MAX_LEVEL = 8;
-const target = L => L <= 2 ? 3 : 4;
+const GOALS = [90, 110, 130, 150, 180, 210, 250, 300]; // Wochenziel in Minuten je Stufe
+const target = L => GOALS[L - 1];
 function indoorWorkout(L, seed) {
   const work = Math.min(50, 25 + L * 3), rest = Math.max(12, 32 - L * 2), rounds = L <= 2 ? 2 : L <= 5 ? 3 : 4;
   const rnd = mulberry(seed); const pool = [...EX]; const ex = [];
@@ -329,15 +332,17 @@ function indoorWorkout(L, seed) {
   return { type:'in', title:'Training drinnen', summary:`${ex.length} Übungen · ${rounds} Runden · ${work} s Belastung / ${rest} s Pause`, list: ex.map(e => ({ n:e.n, a:e.a })), steps };
 }
 function outdoorWorkout(L) {
-  const run = 60 + (L - 1) * 30, walk = Math.max(60, 120 - (L - 1) * 10), reps = Math.round((14 + L * 2) * 60 / (run + walk));
-  const steps = [{ phase:'Aufwärmen', n:'Zügig gehen', t:'5 Minuten warm werden.', s:300, a:'walk' }];
+  // Rückenschonend: zügiges Gehen / Nordic Walking im Wechsel mit sehr zügigem Gehen, kein Laufen
+  const fast = 120 + (L - 1) * 30, easy = 120, reps = Math.max(3, Math.round((10 + L * 4) * 60 / (fast + easy)));
+  const steps = [{ phase:'Aufwärmen', n:'Gemütlich gehen', t:'5 Minuten warm werden, Schultern locker.', s:300, a:'walk' }];
   for (let i = 1; i <= reps; i++) {
-    steps.push({ phase:`Intervall ${i}/${reps}`, n:'🏃 Locker laufen', t:'So langsam, dass du noch reden könntest.', s:run, work:true, a:'run' });
-    steps.push({ phase:`Intervall ${i}/${reps}`, n:'🚶 Gehen', t:'Zügig weitergehen, nicht stehen bleiben.', s:walk, a:'walk' });
+    steps.push({ phase:`Intervall ${i}/${reps}`, n:'🚶‍♂️ Sehr zügig gehen', t:'So schnell, dass du etwas außer Atem bist, aber noch reden kannst. Aufrecht, Arme mitschwingen.', s:fast, work:true, a:'brisk' });
+    steps.push({ phase:`Intervall ${i}/${reps}`, n:'🚶 Normal gehen', t:'Etwas langsamer, aber nicht stehen bleiben.', s:easy, a:'walk' });
   }
   steps.push({ phase:'Abkühlen', n:'Gemütlich gehen & dehnen', t:'Puls runterkommen lassen.', s:300, a:'stretch' });
   const f = s => s % 60 ? `${Math.floor(s/60)}:${pad(s%60)} min` : `${s/60} min`;
-  return { type:'out', title:'Training draußen', summary:`${reps}× ${f(run)} laufen / ${f(walk)} gehen`, list:[{ n:'5 min zügig gehen', a:'walk' }, { n:`${reps}× ${f(run)} locker laufen + ${f(walk)} gehen`, a:'run' }, { n:'5 min ausgehen & dehnen', a:'stretch' }], steps };
+  return { type:'out', title:'Zügig gehen / Nordic Walking', summary:`${reps}× ${f(fast)} sehr zügig / ${f(easy)} normal`,
+    list:[{ n:'5 min gemütlich gehen', a:'walk' }, { n:`${reps}× ${f(fast)} sehr zügig + ${f(easy)} normal gehen`, a:'brisk' }, { n:'5 min ausgehen & dehnen', a:'stretch' }], steps };
 }
 function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 const totalMin = w => Math.round(w.steps.reduce((s, x) => s + x.s, 0) / 60);
@@ -345,7 +350,7 @@ const totalMin = w => Math.round(w.steps.reduce((s, x) => s + x.s, 0) / 60);
 /* Stufe: steigt um 1 für jede abgeschlossene Woche, in der das Ziel erreicht wurde */
 function weekStats() {
   const weeks = {};
-  S.log.forEach(e => { const k = dayKey(monday(new Date(e.date))); weeks[k] = (weeks[k] || 0) + 1; });
+  S.log.forEach(e => { const k = dayKey(monday(new Date(e.date))); weeks[k] = (weeks[k] || 0) + e.min; });
   return weeks;
 }
 function currentLevel() {
@@ -423,8 +428,8 @@ function renderToday() {
   $('startBtn').textContent = doneToday ? '▶ Noch ein Training' : '▶ Training starten';
   // Woche
   const wk = weekStats()[dayKey(monday(new Date()))] || 0, T = target(L);
-  $('weekText').textContent = wk >= T ? `🎉 Wochenziel geschafft: ${wk} von ${T} Einheiten!` : `${wk} von ${T} Einheiten – noch ${T - wk} bis zum Wochenziel.`;
-  $('weekDots').innerHTML = Array.from({ length: T }, (_, i) => `<span class="${i < wk ? 'on' : ''}"></span>`).join('');
+  $('weekText').textContent = wk >= T ? `🎉 Wochenziel geschafft: ${wk} von ${T} Minuten!` : `${wk} von ${T} Minuten – noch ${T - wk} bis zum Wochenziel. Alles zählt: Training, Radfahren, Spaziergänge.`;
+  $('weekDots').innerHTML = `<span class="on" style="flex:0 0 ${Math.min(100, wk / T * 100)}%"></span>`;
 }
 $('swapBtn').onclick = () => { S.prefer = { day: dayKey(new Date()), type: today.type === 'out' ? 'in' : 'out' }; save(); renderToday(); };
 
@@ -492,7 +497,7 @@ function weekStreak() {
   // Wochen in Folge mit Wochenziel (aktuelle Woche zählt, sobald erreicht)
   const weeks = weekStats(); let n = 0, L = currentLevel(); const d = monday(new Date());
   if ((weeks[dayKey(d)] || 0) < target(L)) d.setDate(d.getDate() - 7);
-  while ((weeks[dayKey(d)] || 0) >= 3) { n++; d.setDate(d.getDate() - 7); }
+  while ((weeks[dayKey(d)] || 0) >= GOALS[0]) { n++; d.setDate(d.getDate() - 7); }
   return n;
 }
 const BADGES = [
@@ -540,11 +545,11 @@ function renderPlan() {
   const L = currentLevel(), ow = outdoorWorkout(L), iw = indoorWorkout(L, 1);
   const wk = weekStats()[dayKey(monday(new Date()))] || 0;
   $('levelTitle').textContent = `Stufe ${L} von ${MAX_LEVEL}`;
-  $('levelText').innerHTML = `Wochenziel: <b>${target(L)} Einheiten</b> (diese Woche: ${wk}).<br>Draußen: ${ow.summary}.<br>Drinnen: ${iw.summary}.` +
+  $('levelText').innerHTML = `Wochenziel: <b>${target(L)} Minuten</b> Bewegung (diese Woche: ${wk}).<br>Draußen: ${ow.summary}.<br>Drinnen: ${iw.summary}.` +
     (L < MAX_LEVEL ? '<br><br>Schaffst du das Wochenziel, geht es nächste Woche eine Stufe höher.' : '<br><br>Höchste Stufe – jetzt heißt es dranbleiben! 💪');
   $('levels').innerHTML = Array.from({ length: MAX_LEVEL }, (_, i) => {
     const l = i + 1, o = outdoorWorkout(l);
-    return `<li style="${l === L ? 'color:var(--accent);font-weight:700' : l < L ? 'opacity:.5' : ''}"><span>${l < L ? '✅' : l === L ? '👉' : '⬜'} Stufe ${l}</span><span class="small" style="text-align:right">${target(l)}×/Woche · ${o.summary}</span></li>`;
+    return `<li style="${l === L ? 'color:var(--accent);font-weight:700' : l < L ? 'opacity:.5' : ''}"><span>${l < L ? '✅' : l === L ? '👉' : '⬜'} Stufe ${l}</span><span class="small" style="text-align:right">${target(l)} min/Woche · ${o.summary}</span></li>`;
   }).join('');
 }
 

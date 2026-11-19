@@ -60,6 +60,22 @@
   .pbar { width:100%; max-width:400px; height:8px; background:var(--line); border-radius:4px; overflow:hidden; margin-bottom:24px; }
   .pbar i { display:block; height:100%; background:var(--accent); width:0; }
   #player .row { width:100%; max-width:400px; }
+  .fig { display:block; }
+  .fig .gnd { stroke:var(--line); stroke-width:2; }
+  .fig .wall { fill:var(--line); }
+  .fig path, .fig circle { fill:none; stroke:var(--text); stroke-width:4.5; stroke-linecap:round; stroke-linejoin:round; }
+  .fig .back { opacity:.45; }
+  .fig circle { fill:var(--text); stroke:none; }
+  #pFig { width:min(62vw, 240px); height:min(62vw, 240px); }
+  #pFig path { stroke:var(--accent); } #pFig circle { fill:var(--accent); }
+  #pTime { font-size:4.5rem; margin:4px 0; }
+  #pName { font-size:1.7rem; margin:2px 0; }
+  .exrow { display:flex; align-items:center; gap:12px; padding:6px 0; border-top:1px solid var(--line); }
+  .exrow svg { width:56px; height:56px; flex:0 0 56px; background:var(--bg); border-radius:10px; }
+  .gallery { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
+  .gallery div { background:var(--bg); border-radius:14px; padding:8px; text-align:center; font-size:.85rem; }
+  .gallery svg { width:100%; height:auto; aspect-ratio:1; }
+  .gallery p { margin:4px 0 0; color:var(--muted); font-size:.75rem; text-align:left; }
 </style>
 </head>
 <body>
@@ -110,6 +126,10 @@
       Bei gutem Wetter geht's raus (Geh-Lauf-Intervalle), sonst trainierst du drinnen ohne Geräte.
       Andere Aktivitäten wie Radfahren oder Wandern kannst du unter „Eintragen“ erfassen, sie zählen mit.
     </div>
+  </div>
+  <div class="card">
+    <h2>Alle Übungen</h2>
+    <div class="gallery" id="gallery"></div>
   </div>
   <div class="card">
     <h2>Stufen</h2>
@@ -181,6 +201,7 @@
 
 <!-- PLAYER -->
 <div id="player" hidden>
+  <svg id="pFig" class="fig" viewBox="0 0 100 100" data-anim="pause"></svg>
   <div id="pPhase">Los geht's</div>
   <div id="pName">–</div>
   <div id="pTip"></div>
@@ -207,19 +228,75 @@ const monday = d => { const x = new Date(d); x.setHours(0,0,0,0); x.setDate(x.ge
 
 /* ================= Übungen ================= */
 const EX = [
-  { n:'Hampelmann', t:'Locker springen, Arme über den Kopf. Bringt den Puls hoch.' },
-  { n:'Kniebeugen', t:'Füße hüftbreit, Po nach hinten, Knie über den Zehen, Rücken gerade.' },
-  { n:'Liegestütze', t:'Gerne auf den Knien. Körper bleibt eine gerade Linie.' },
-  { n:'Ausfallschritte', t:'Großer Schritt nach vorn, hinteres Knie Richtung Boden, abwechseln.' },
-  { n:'Unterarmstütz (Plank)', t:'Auf Unterarmen und Zehen, Bauch fest, Po nicht hochstrecken.' },
-  { n:'Po-Brücke', t:'Rückenlage, Füße aufgestellt, Becken hochdrücken und kurz halten.' },
-  { n:'Bergsteiger', t:'Liegestützposition, Knie abwechselnd zügig zur Brust ziehen.' },
-  { n:'Superman', t:'Bauchlage, Arme und Beine gleichzeitig leicht anheben, kurz halten.' },
-  { n:'Wandsitzen', t:'Rücken an die Wand, Knie im 90°-Winkel, halten.' },
-  { n:'Seitstütz', t:'Auf einem Unterarm seitlich stützen, Hüfte hoch. Halbzeit Seite wechseln.' },
-  { n:'Knieheben im Stand', t:'Auf der Stelle laufen, Knie hoch, Arme mitnehmen.' },
-  { n:'Rückenstrecker', t:'Bauchlage, Hände an die Schläfen, Oberkörper leicht anheben.' },
+  { n:'Hampelmann', a:'jack', t:'Locker springen, Arme über den Kopf. Bringt den Puls hoch.' },
+  { n:'Kniebeugen', a:'squat', t:'Füße hüftbreit, Po nach hinten, Knie über den Zehen, Rücken gerade.' },
+  { n:'Liegestütze', a:'pushup', t:'Gerne auf den Knien. Körper bleibt eine gerade Linie.' },
+  { n:'Ausfallschritte', a:'lunge', t:'Großer Schritt nach vorn, hinteres Knie Richtung Boden, abwechseln.' },
+  { n:'Unterarmstütz (Plank)', a:'plank', t:'Auf Unterarmen und Zehen, Bauch fest, Po nicht hochstrecken.' },
+  { n:'Po-Brücke', a:'bridge', t:'Rückenlage, Füße aufgestellt, Becken hochdrücken und kurz halten.' },
+  { n:'Bergsteiger', a:'climber', t:'Liegestützposition, Knie abwechselnd zügig zur Brust ziehen.' },
+  { n:'Superman', a:'superman', t:'Bauchlage, Arme und Beine gleichzeitig leicht anheben, kurz halten.' },
+  { n:'Wandsitzen', a:'wallsit', t:'Rücken an die Wand, Knie im 90°-Winkel, halten.' },
+  { n:'Seitstütz', a:'sideplank', t:'Auf einem Unterarm seitlich stützen, Hüfte hoch. Halbzeit Seite wechseln.' },
+  { n:'Knieheben im Stand', a:'knees', t:'Auf der Stelle laufen, Knie hoch, Arme mitnehmen.' },
+  { n:'Rückenstrecker', a:'back', t:'Bauchlage, Hände an die Schläfen, Oberkörper leicht anheben.' },
 ];
+
+/* ================= Strichmännchen-Animationen ================= */
+/* Pose = [Kopf, Nacken, Hüfte, Ellbogen L, Hand L, Ellbogen R, Hand R, Knie L, Fuß L, Knie R, Fuß R] als x,y-Paare (0–100) */
+const STAND_F = [50,16, 50,26, 50,52, 43,38, 40,50, 57,38, 60,50, 46,71, 45,90, 54,71, 55,90];
+const UP_PLANK = [19,53, 26,58, 58,73, 27,73, 28,89, 27,73, 28,89, 73,80, 88,89, 73,80, 88,89];
+const LIE_DOWN = [15,83, 22,85, 52,87, 12,86, 2,86, 12,86, 2,86, 70,88, 88,88, 70,88, 88,88];
+const ANIM = {
+  jack:      { ms:900,  f:[STAND_F, [50,14, 50,24, 50,50, 41,16, 36,4, 59,16, 64,4, 42,69, 36,90, 58,69, 64,90]] },
+  squat:     { ms:2200, f:[[50,16, 50,26, 50,52, 60,27, 70,27, 59,28, 69,28, 51,71, 50,90, 49,71, 48,90],
+                           [52,38, 48,47, 36,68, 58,48, 68,48, 58,49, 68,49, 55,70, 52,90, 54,71, 51,90]] },
+  pushup:    { ms:1800, f:[UP_PLANK, [19,71, 26,77, 58,83, 38,80, 28,89, 38,80, 28,89, 73,86, 88,89, 73,86, 88,89]] },
+  lunge:     { ms:2200, f:[[50,16, 50,26, 50,52, 44,40, 49,51, 44,40, 49,51, 51,71, 50,90, 49,71, 48,90],
+                           [51,28, 50,38, 48,64, 44,52, 49,63, 44,52, 49,63, 66,66, 66,90, 42,82, 24,88]] },
+  plank:     { ms:3000, f:[[20,64, 27,69, 58,77, 28,88, 42,88, 28,88, 42,88, 73,83, 88,89, 73,83, 88,89],
+                           [20,63, 27,68, 58,75, 28,88, 42,88, 28,88, 42,88, 73,82, 88,89, 73,82, 88,89]] },
+  bridge:    { ms:2400, f:[[13,82, 21,85, 50,87, 33,88, 45,88, 33,88, 45,88, 62,70, 72,90, 63,70, 73,90],
+                           [13,82, 21,85, 48,71, 33,88, 45,88, 33,88, 45,88, 64,66, 72,90, 65,66, 73,90]] },
+  climber:   { ms:800,  f:[[19,53, 26,58, 58,72, 27,73, 28,89, 27,73, 28,89, 44,76, 52,89, 73,80, 88,89],
+                           [19,53, 26,58, 58,72, 27,73, 28,89, 27,73, 28,89, 73,80, 88,89, 44,76, 52,89]] },
+  superman:  { ms:2400, f:[LIE_DOWN, [15,77, 22,80, 52,87, 12,78, 2,74, 12,78, 2,74, 70,85, 88,80, 70,85, 88,80]] },
+  wallsit:   { ms:3000, wall:true, f:[[36,32, 36,42, 36,68, 44,52, 38,46, 45,53, 39,47, 55,68, 55,90, 54,69, 54,90],
+                           [36,33, 36,43, 36,68, 44,53, 38,47, 45,54, 39,48, 55,68, 55,90, 54,69, 54,90]] },
+  sideplank: { ms:2400, f:[[20,62, 27,70, 58,86, 27,88, 36,88, 40,68, 52,78, 73,88, 88,89, 73,87, 88,88],
+                           [20,62, 27,70, 58,78, 27,88, 36,88, 40,64, 52,72, 73,84, 88,89, 73,83, 88,88]] },
+  knees:     { ms:700,  f:[[50,16, 50,26, 50,52, 44,38, 40,48, 56,36, 60,26, 66,56, 64,74, 50,71, 50,90],
+                           [50,16, 50,26, 50,52, 56,36, 60,26, 44,38, 40,48, 50,71, 50,90, 66,56, 64,74]] },
+  back:      { ms:2400, f:[[15,82, 22,85, 52,87, 24,78, 17,80, 24,78, 17,80, 70,88, 88,88, 70,88, 88,88],
+                           [16,74, 23,79, 52,87, 25,70, 18,73, 25,70, 18,73, 70,88, 88,88, 70,88, 88,88]] },
+  walk:      { ms:1100, f:[[52,16, 51,26, 50,52, 47,39, 44,50, 54,39, 58,49, 55,71, 56,90, 46,71, 42,89],
+                           [52,16, 51,26, 50,52, 54,39, 58,49, 47,39, 44,50, 46,71, 42,89, 55,71, 56,90]] },
+  run:       { ms:650,  f:[[55,17, 53,27, 48,52, 42,40, 46,48, 58,38, 64,32, 62,62, 58,80, 44,70, 32,78],
+                           [55,17, 53,27, 48,52, 58,38, 64,32, 42,40, 46,48, 44,70, 32,78, 62,62, 58,80]] },
+  stretch:   { ms:3200, f:[[50,16, 50,26, 50,52, 45,14, 46,3, 55,14, 54,3, 46,71, 45,90, 54,71, 55,90],
+                           [42,18, 46,27, 50,52, 38,16, 32,6, 46,14, 38,4, 46,71, 45,90, 54,71, 55,90]] },
+  pause:     { ms:3200, f:[STAND_F, [50,15, 50,25, 50,52, 42,37, 39,49, 58,37, 61,49, 46,71, 45,90, 54,71, 55,90]] },
+};
+const figSvg = (a, cls = 'fig') => `<svg class="${cls}" viewBox="0 0 100 100" data-anim="${a}"></svg>`;
+function drawFig(el, p, wall) {
+  const pt = i => `${p[i*2].toFixed(1)},${p[i*2+1].toFixed(1)}`;
+  el.innerHTML = (wall ? '<rect class="wall" x="24" y="0" width="5" height="91"/>' : '') +
+    '<line class="gnd" x1="0" y1="91.5" x2="100" y2="91.5"/>' +
+    `<path class="back" d="M${pt(6)} L${pt(5)} L${pt(1)} M${pt(10)} L${pt(9)} L${pt(2)}"/>` +
+    `<path d="M${pt(4)} L${pt(3)} L${pt(1)} L${pt(2)} L${pt(7)} L${pt(8)}"/>` +
+    `<circle cx="${p[0]}" cy="${p[1]}" r="6.5"/>`;
+}
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+function animLoop(now) {
+  document.querySelectorAll('svg[data-anim]').forEach(el => {
+    if (!el.getClientRects().length) return; // unsichtbar → nicht zeichnen
+    const A = ANIM[el.dataset.anim] || ANIM.pause;
+    const s = reduceMotion ? 0.5 : 0.5 - 0.5 * Math.cos(2 * Math.PI * (now % A.ms) / A.ms);
+    drawFig(el, A.f[0].map((v, i) => v + (A.f[1][i] - v) * s), A.wall);
+  });
+  requestAnimationFrame(animLoop);
+}
+requestAnimationFrame(animLoop);
 
 /* ================= Plan / Stufen ================= */
 const MAX_LEVEL = 8;
@@ -229,24 +306,24 @@ function indoorWorkout(L, seed) {
   const rnd = mulberry(seed); const pool = [...EX]; const ex = [];
   ex.push(pool.splice(0, 1)[0]); // immer Hampelmann zuerst als Aufwärmen
   while (ex.length < 6) ex.push(pool.splice(Math.floor(rnd() * pool.length), 1)[0]);
-  const steps = [{ phase:'Aufwärmen', n:'Auf der Stelle gehen & Arme kreisen', t:'Ganz locker anfangen.', s:120 }];
+  const steps = [{ phase:'Aufwärmen', n:'Auf der Stelle gehen & Arme kreisen', t:'Ganz locker anfangen.', s:120, a:'walk' }];
   for (let r = 1; r <= rounds; r++) ex.forEach((e, i) => {
-    steps.push({ phase:`Runde ${r}/${rounds}`, n:e.n, t:e.t, s:work, work:true });
-    if (!(r === rounds && i === ex.length - 1)) steps.push({ phase:'Pause', n:'Durchatmen', t:'', s: i === ex.length - 1 ? rest * 3 : rest });
+    steps.push({ phase:`Runde ${r}/${rounds}`, n:e.n, t:e.t, s:work, work:true, a:e.a });
+    if (!(r === rounds && i === ex.length - 1)) steps.push({ phase:'Pause', n:'Durchatmen', t:'', a:'pause', s: i === ex.length - 1 ? rest * 3 : rest });
   });
-  steps.push({ phase:'Abkühlen', n:'Dehnen', t:'Beine, Arme und Rücken locker dehnen.', s:120 });
-  return { type:'in', title:'Training drinnen', summary:`${ex.length} Übungen · ${rounds} Runden · ${work} s Belastung / ${rest} s Pause`, list: ex.map(e => e.n), steps };
+  steps.push({ phase:'Abkühlen', n:'Dehnen', t:'Beine, Arme und Rücken locker dehnen.', s:120, a:'stretch' });
+  return { type:'in', title:'Training drinnen', summary:`${ex.length} Übungen · ${rounds} Runden · ${work} s Belastung / ${rest} s Pause`, list: ex.map(e => ({ n:e.n, a:e.a })), steps };
 }
 function outdoorWorkout(L) {
   const run = 60 + (L - 1) * 30, walk = Math.max(60, 120 - (L - 1) * 10), reps = Math.round((14 + L * 2) * 60 / (run + walk));
-  const steps = [{ phase:'Aufwärmen', n:'Zügig gehen', t:'5 Minuten warm werden.', s:300 }];
+  const steps = [{ phase:'Aufwärmen', n:'Zügig gehen', t:'5 Minuten warm werden.', s:300, a:'walk' }];
   for (let i = 1; i <= reps; i++) {
-    steps.push({ phase:`Intervall ${i}/${reps}`, n:'🏃 Locker laufen', t:'So langsam, dass du noch reden könntest.', s:run, work:true });
-    steps.push({ phase:`Intervall ${i}/${reps}`, n:'🚶 Gehen', t:'Zügig weitergehen, nicht stehen bleiben.', s:walk });
+    steps.push({ phase:`Intervall ${i}/${reps}`, n:'🏃 Locker laufen', t:'So langsam, dass du noch reden könntest.', s:run, work:true, a:'run' });
+    steps.push({ phase:`Intervall ${i}/${reps}`, n:'🚶 Gehen', t:'Zügig weitergehen, nicht stehen bleiben.', s:walk, a:'walk' });
   }
-  steps.push({ phase:'Abkühlen', n:'Gemütlich gehen & dehnen', t:'Puls runterkommen lassen.', s:300 });
+  steps.push({ phase:'Abkühlen', n:'Gemütlich gehen & dehnen', t:'Puls runterkommen lassen.', s:300, a:'stretch' });
   const f = s => s % 60 ? `${Math.floor(s/60)}:${pad(s%60)} min` : `${s/60} min`;
-  return { type:'out', title:'Training draußen', summary:`${reps}× ${f(run)} laufen / ${f(walk)} gehen`, list:[`5 min Aufwärmen gehen`, `${reps}× ${f(run)} laufen + ${f(walk)} gehen`, `5 min Ausgehen & Dehnen`], steps };
+  return { type:'out', title:'Training draußen', summary:`${reps}× ${f(run)} laufen / ${f(walk)} gehen`, list:[{ n:'5 min zügig gehen', a:'walk' }, { n:`${reps}× ${f(run)} locker laufen + ${f(walk)} gehen`, a:'run' }, { n:'5 min ausgehen & dehnen', a:'stretch' }], steps };
 }
 function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 const totalMin = w => Math.round(w.steps.reduce((s, x) => s + x.s, 0) / 60);
@@ -326,7 +403,7 @@ function renderToday() {
   $('todayPill').textContent = type === 'out' ? '☀️ Draußen' : '🏠 Drinnen';
   $('todayPill').className = 'pill ' + type;
   $('todayWhy').textContent = (type === suggested ? ok.why : 'Du hast das andere Training gewählt.') + ` · Stufe ${L} · ca. ${totalMin(today)} min`;
-  $('todayList').innerHTML = `<div class="small" style="margin-bottom:4px">${today.summary}</div>` + today.list.map(n => `<div class="ex"><span>${n}</span></div>`).join('');
+  $('todayList').innerHTML = `<div class="small" style="margin-bottom:4px">${today.summary}</div>` + today.list.map(x => `<div class="exrow">${figSvg(x.a)}<span>${x.n}</span></div>`).join('');
   $('swapBtn').textContent = type === 'out' ? '⇄ Lieber drinnen trainieren' : '⇄ Lieber nach draußen';
   const doneToday = S.log.some(e => dayKey(new Date(e.date)) === dayKey(new Date()));
   $('startBtn').textContent = doneToday ? '▶ Noch ein Training' : '▶ Training starten';
@@ -348,7 +425,7 @@ function say(t) { try { speechSynthesis.cancel(); const u = new SpeechSynthesisU
 function showStep() {
   const st = P.w.steps[P.i], nx = P.w.steps[P.i + 1];
   $('pPhase').textContent = st.phase; $('pPhase').style.color = st.work ? 'var(--accent)' : 'var(--warm)';
-  $('pName').textContent = st.n; $('pTip').textContent = st.t;
+  $('pName').textContent = st.n; $('pFig').dataset.anim = st.a || 'pause'; $('pTip').textContent = st.t;
   $('pNext').textContent = nx ? 'Danach: ' + nx.n.replace(/^\S+ /, m => /\p{Emoji}/u.test(m) ? '' : m) : 'Danach: geschafft!';
   say(st.n.replace(/[^\p{L}\p{N}\s&-]/gu, ''));
 }
@@ -476,6 +553,7 @@ document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
   scrollTo(0, 0);
 });
 function renderAll() { renderToday(); renderStats(); renderPlan(); }
+$('gallery').innerHTML = EX.map(e => `<div>${figSvg(e.a)}<b>${e.n}</b><p>${e.t}</p></div>`).join('');
 
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
 renderWeather(); renderAll();

@@ -1,0 +1,485 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b1d1a">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<title>Beweg dich</title>
+<style>
+  :root { --bg:#0b1d1a; --card:#12302b; --line:#1f4a42; --text:#ecfdf5; --muted:#8fb8ad; --accent:#34d399; --warm:#fbbf24; --sky:#60a5fa; --bad:#f87171; color-scheme:dark; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:system-ui, Roboto, sans-serif;
+         padding:16px; padding-top:max(16px, env(safe-area-inset-top)); padding-bottom:max(90px, calc(env(safe-area-inset-bottom) + 80px)); }
+  main { max-width:520px; margin:0 auto; }
+  h1 { font-size:1.4rem; margin:6px 0 14px; }
+  h2 { font-size:1.05rem; margin:0 0 10px; }
+  .card { background:var(--card); border-radius:18px; padding:16px; margin-bottom:12px; }
+  .small { color:var(--muted); font-size:.85rem; }
+  .btn { display:block; width:100%; padding:15px; font-size:1.05rem; font-weight:700; border:none; border-radius:14px; background:var(--accent); color:#05221b; text-align:center; }
+  .btn.sec { background:var(--line); color:var(--text); }
+  .row { display:flex; gap:10px; margin-top:10px; }
+  .row > * { flex:1; }
+  input, select { width:100%; padding:12px; font-size:1rem; border-radius:12px; border:1px solid var(--line); background:var(--bg); color:var(--text); }
+  .weather { display:flex; align-items:center; gap:14px; }
+  .weather .ico { font-size:2.6rem; }
+  .weather b { font-size:1.4rem; }
+  .pill { display:inline-block; padding:3px 10px; border-radius:99px; font-size:.8rem; font-weight:700; background:var(--line); }
+  .pill.out { background:var(--warm); color:#3a2500; } .pill.in { background:var(--sky); color:#071a33; }
+  .ex { display:flex; justify-content:space-between; padding:8px 0; border-top:1px solid var(--line); font-size:.95rem; }
+  .stats { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  .stats div { background:var(--bg); border-radius:12px; padding:10px 6px; text-align:center; }
+  .stats b { display:block; font-size:1.5rem; }
+  .bars { display:flex; align-items:flex-end; gap:6px; height:90px; margin-top:12px; }
+  .bars div { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; gap:4px; }
+  .bars i { display:block; width:100%; background:var(--accent); border-radius:6px 6px 2px 2px; min-height:3px; }
+  .bars span { font-size:.7rem; color:var(--muted); }
+  .badges { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  .badge { background:var(--bg); border-radius:12px; padding:10px 6px; text-align:center; font-size:.75rem; }
+  .badge .e { font-size:1.8rem; display:block; }
+  .badge.locked { opacity:.35; filter:grayscale(1); }
+  .week { display:flex; gap:6px; margin:10px 0; }
+  .week span { flex:1; height:10px; border-radius:5px; background:var(--line); }
+  .week span.on { background:var(--accent); }
+  li { list-style:none; display:flex; justify-content:space-between; gap:10px; padding:9px 0; border-top:1px solid var(--line); }
+  ul { padding:0; margin:0; }
+  nav { position:fixed; left:0; right:0; bottom:0; display:flex; background:#081512; border-top:1px solid var(--line); padding-bottom:env(safe-area-inset-bottom); }
+  nav button { flex:1; background:none; border:none; color:var(--muted); padding:10px 0 12px; font-size:.75rem; }
+  nav button b { display:block; font-size:1.4rem; }
+  nav button.active { color:var(--accent); }
+  section[hidden] { display:none; }
+  /* Player */
+  #player { position:fixed; inset:0; background:var(--bg); display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:24px; z-index:10; }
+  #player[hidden] { display:none; }
+  #pPhase { font-size:1rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
+  #pName { font-size:2rem; font-weight:800; margin:8px 0; }
+  #pTip { color:var(--muted); max-width:360px; min-height:3em; }
+  #pTime { font-size:6rem; font-weight:800; font-variant-numeric:tabular-nums; margin:10px 0; }
+  #pNext { color:var(--muted); margin-bottom:10px; }
+  .pbar { width:100%; max-width:400px; height:8px; background:var(--line); border-radius:4px; overflow:hidden; margin-bottom:24px; }
+  .pbar i { display:block; height:100%; background:var(--accent); width:0; }
+  #player .row { width:100%; max-width:400px; }
+</style>
+</head>
+<body>
+<main>
+
+<!-- HEUTE -->
+<section id="tab-heute">
+  <h1>💪 Beweg dich!</h1>
+  <div class="card">
+    <div class="weather" id="weather"><span class="ico">🌍</span><div><b>Wetter</b><div class="small">Ort festlegen, damit ich passend vorschlagen kann.</div></div></div>
+    <div class="row" id="locRow">
+      <input id="city" placeholder="Stadt, z. B. Stuttgart">
+      <button class="btn sec" id="cityBtn" style="flex:0 0 auto;width:auto">OK</button>
+    </div>
+    <button class="btn sec" id="gpsBtn" style="margin-top:8px">📍 Meinen Standort verwenden</button>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <h2 id="todayTitle">Dein Training heute</h2><span class="pill" id="todayPill">–</span>
+    </div>
+    <div class="small" id="todayWhy"></div>
+    <div id="todayList" style="margin-top:8px"></div>
+    <button class="btn" id="startBtn" style="margin-top:12px">▶ Training starten</button>
+    <button class="btn sec" id="swapBtn" style="margin-top:8px">⇄ Lieber das andere Training</button>
+  </div>
+
+  <div class="card">
+    <h2>Diese Woche</h2>
+    <div class="small" id="weekText"></div>
+    <div class="week" id="weekDots"></div>
+  </div>
+</section>
+
+<!-- PLAN -->
+<section id="tab-plan" hidden>
+  <h1>📈 Trainingsplan</h1>
+  <div class="card">
+    <h2 id="levelTitle">Stufe 1</h2>
+    <div class="small" id="levelText"></div>
+  </div>
+  <div class="card">
+    <h2>So funktioniert dein Plan</h2>
+    <div class="small" style="line-height:1.5">
+      Empfehlung für Erwachsene: rund <b>150 Minuten Bewegung pro Woche</b> plus <b>2× Kräftigung</b>.<br><br>
+      Du startest klein mit <b>3 Einheiten à ca. 20 Minuten</b>. Schaffst du dein Wochenziel, steigst du eine Stufe auf:
+      längere Belastung, kürzere Pausen, mehr Laufanteil. Ab Stufe 3 sind es 4 Einheiten pro Woche.<br><br>
+      Bei gutem Wetter geht's raus (Geh-Lauf-Intervalle), sonst trainierst du drinnen ohne Geräte.
+      Andere Aktivitäten wie Radfahren oder Wandern kannst du unter „Eintragen“ erfassen, sie zählen mit.
+    </div>
+  </div>
+  <div class="card">
+    <h2>Stufen</h2>
+    <ul id="levels"></ul>
+  </div>
+</section>
+
+<!-- STATISTIK -->
+<section id="tab-stats" hidden>
+  <h1>📊 Statistik</h1>
+  <div class="card">
+    <div class="stats">
+      <div><span class="small">Wochen-Serie</span><b id="sWeeks">0</b></div>
+      <div><span class="small">Tage-Serie</span><b id="sDays">0</b></div>
+      <div><span class="small">Einheiten</span><b id="sCount">0</b></div>
+    </div>
+    <div class="stats" style="margin-top:8px">
+      <div><span class="small">Minuten gesamt</span><b id="sMin">0</b></div>
+      <div><span class="small">Draußen</span><b id="sOut">0</b></div>
+      <div><span class="small">Drinnen</span><b id="sIn">0</b></div>
+    </div>
+    <h2 style="margin-top:16px">Minuten der letzten 7 Tage</h2>
+    <div class="bars" id="bars"></div>
+  </div>
+  <div class="card">
+    <h2>Herausforderungen</h2>
+    <div class="badges" id="badges"></div>
+  </div>
+  <div class="card">
+    <h2>Verlauf</h2>
+    <ul id="log"></ul>
+  </div>
+</section>
+
+<!-- EINTRAGEN -->
+<section id="tab-add" hidden>
+  <h1>✍️ Eintragen</h1>
+  <div class="card">
+    <h2>Andere Aktivität</h2>
+    <label class="small">Was hast du gemacht?</label>
+    <select id="addType">
+      <option value="out|🚴 Radfahren">🚴 Radfahren</option>
+      <option value="out|🚶 Spaziergang">🚶 Spaziergang</option>
+      <option value="out|🥾 Wandern">🥾 Wandern</option>
+      <option value="out|🏃 Laufen">🏃 Laufen</option>
+      <option value="in|🧘 Yoga / Dehnen">🧘 Yoga / Dehnen</option>
+      <option value="out|🏊 Schwimmen">🏊 Schwimmen</option>
+      <option value="in|🏋️ Kraft zu Hause">🏋️ Kraft zu Hause</option>
+    </select>
+    <label class="small" style="display:block;margin-top:10px">Minuten</label>
+    <input id="addMin" type="number" inputmode="numeric" value="30" min="5" max="600">
+    <button class="btn" id="addBtn" style="margin-top:12px">Speichern</button>
+    <div class="small" id="addMsg" style="margin-top:8px"></div>
+  </div>
+  <div class="card">
+    <h2>Daten</h2>
+    <div class="small">Alles wird nur auf diesem Gerät gespeichert.</div>
+    <button class="btn sec" id="resetBtn" style="margin-top:10px">Alle Daten löschen</button>
+  </div>
+</section>
+</main>
+
+<nav>
+  <button data-tab="heute" class="active"><b>🏠</b>Heute</button>
+  <button data-tab="plan"><b>📈</b>Plan</button>
+  <button data-tab="stats"><b>📊</b>Statistik</button>
+  <button data-tab="add"><b>✍️</b>Eintragen</button>
+</nav>
+
+<!-- PLAYER -->
+<div id="player" hidden>
+  <div id="pPhase">Los geht's</div>
+  <div id="pName">–</div>
+  <div id="pTip"></div>
+  <div id="pTime">0</div>
+  <div id="pNext"></div>
+  <div class="pbar"><i id="pBar"></i></div>
+  <div class="row">
+    <button class="btn sec" id="pPause">⏸ Pause</button>
+    <button class="btn sec" id="pSkip">⏭ Weiter</button>
+  </div>
+  <button class="btn sec" id="pStop" style="margin-top:10px;max-width:400px">✕ Beenden</button>
+</div>
+
+<script>
+/* ================= Daten ================= */
+const KEY = 'sport-v1';
+let S = { loc: null, log: [], weather: null, prefer: null };
+try { Object.assign(S, JSON.parse(localStorage.getItem(KEY)) || {}); } catch {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch {} };
+const $ = id => document.getElementById(id);
+const pad = n => String(n).padStart(2, '0');
+const dayKey = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const monday = d => { const x = new Date(d); x.setHours(0,0,0,0); x.setDate(x.getDate() - (x.getDay() + 6) % 7); return x; };
+
+/* ================= Übungen ================= */
+const EX = [
+  { n:'Hampelmann', t:'Locker springen, Arme über den Kopf. Bringt den Puls hoch.' },
+  { n:'Kniebeugen', t:'Füße hüftbreit, Po nach hinten, Knie über den Zehen, Rücken gerade.' },
+  { n:'Liegestütze', t:'Gerne auf den Knien. Körper bleibt eine gerade Linie.' },
+  { n:'Ausfallschritte', t:'Großer Schritt nach vorn, hinteres Knie Richtung Boden, abwechseln.' },
+  { n:'Unterarmstütz (Plank)', t:'Auf Unterarmen und Zehen, Bauch fest, Po nicht hochstrecken.' },
+  { n:'Po-Brücke', t:'Rückenlage, Füße aufgestellt, Becken hochdrücken und kurz halten.' },
+  { n:'Bergsteiger', t:'Liegestützposition, Knie abwechselnd zügig zur Brust ziehen.' },
+  { n:'Superman', t:'Bauchlage, Arme und Beine gleichzeitig leicht anheben, kurz halten.' },
+  { n:'Wandsitzen', t:'Rücken an die Wand, Knie im 90°-Winkel, halten.' },
+  { n:'Seitstütz', t:'Auf einem Unterarm seitlich stützen, Hüfte hoch. Halbzeit Seite wechseln.' },
+  { n:'Knieheben im Stand', t:'Auf der Stelle laufen, Knie hoch, Arme mitnehmen.' },
+  { n:'Rückenstrecker', t:'Bauchlage, Hände an die Schläfen, Oberkörper leicht anheben.' },
+];
+
+/* ================= Plan / Stufen ================= */
+const MAX_LEVEL = 8;
+const target = L => L <= 2 ? 3 : 4;
+function indoorWorkout(L, seed) {
+  const work = Math.min(50, 25 + L * 3), rest = Math.max(12, 32 - L * 2), rounds = L <= 2 ? 2 : L <= 5 ? 3 : 4;
+  const rnd = mulberry(seed); const pool = [...EX]; const ex = [];
+  ex.push(pool.splice(0, 1)[0]); // immer Hampelmann zuerst als Aufwärmen
+  while (ex.length < 6) ex.push(pool.splice(Math.floor(rnd() * pool.length), 1)[0]);
+  const steps = [{ phase:'Aufwärmen', n:'Auf der Stelle gehen & Arme kreisen', t:'Ganz locker anfangen.', s:120 }];
+  for (let r = 1; r <= rounds; r++) ex.forEach((e, i) => {
+    steps.push({ phase:`Runde ${r}/${rounds}`, n:e.n, t:e.t, s:work, work:true });
+    if (!(r === rounds && i === ex.length - 1)) steps.push({ phase:'Pause', n:'Durchatmen', t:'', s: i === ex.length - 1 ? rest * 3 : rest });
+  });
+  steps.push({ phase:'Abkühlen', n:'Dehnen', t:'Beine, Arme und Rücken locker dehnen.', s:120 });
+  return { type:'in', title:'Training drinnen', summary:`${ex.length} Übungen · ${rounds} Runden · ${work} s Belastung / ${rest} s Pause`, list: ex.map(e => e.n), steps };
+}
+function outdoorWorkout(L) {
+  const run = 60 + (L - 1) * 30, walk = Math.max(60, 120 - (L - 1) * 10), reps = Math.round((14 + L * 2) * 60 / (run + walk));
+  const steps = [{ phase:'Aufwärmen', n:'Zügig gehen', t:'5 Minuten warm werden.', s:300 }];
+  for (let i = 1; i <= reps; i++) {
+    steps.push({ phase:`Intervall ${i}/${reps}`, n:'🏃 Locker laufen', t:'So langsam, dass du noch reden könntest.', s:run, work:true });
+    steps.push({ phase:`Intervall ${i}/${reps}`, n:'🚶 Gehen', t:'Zügig weitergehen, nicht stehen bleiben.', s:walk });
+  }
+  steps.push({ phase:'Abkühlen', n:'Gemütlich gehen & dehnen', t:'Puls runterkommen lassen.', s:300 });
+  const f = s => s % 60 ? `${Math.floor(s/60)}:${pad(s%60)} min` : `${s/60} min`;
+  return { type:'out', title:'Training draußen', summary:`${reps}× ${f(run)} laufen / ${f(walk)} gehen`, list:[`5 min Aufwärmen gehen`, `${reps}× ${f(run)} laufen + ${f(walk)} gehen`, `5 min Ausgehen & Dehnen`], steps };
+}
+function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const totalMin = w => Math.round(w.steps.reduce((s, x) => s + x.s, 0) / 60);
+
+/* Stufe: steigt um 1 für jede abgeschlossene Woche, in der das Ziel erreicht wurde */
+function weekStats() {
+  const weeks = {};
+  S.log.forEach(e => { const k = dayKey(monday(new Date(e.date))); weeks[k] = (weeks[k] || 0) + 1; });
+  return weeks;
+}
+function currentLevel() {
+  if (!S.log.length) return 1;
+  const weeks = weekStats(); const thisMon = monday(new Date());
+  let L = 1; const first = monday(new Date(Math.min(...S.log.map(e => +new Date(e.date)))));
+  for (let d = new Date(first); d < thisMon; d.setDate(d.getDate() + 7)) {
+    if ((weeks[dayKey(d)] || 0) >= target(L)) L = Math.min(MAX_LEVEL, L + 1);
+  }
+  return L;
+}
+
+/* ================= Wetter (Open-Meteo, ohne Schlüssel) ================= */
+const WMO = c => c === 0 ? ['☀️','Sonnig'] : c <= 2 ? ['🌤️','Leicht bewölkt'] : c === 3 ? ['☁️','Bewölkt'] : c <= 48 ? ['🌫️','Nebel']
+  : c <= 57 ? ['🌦️','Niesel'] : c <= 67 ? ['🌧️','Regen'] : c <= 77 ? ['🌨️','Schnee'] : c <= 82 ? ['🌧️','Schauer'] : c <= 86 ? ['🌨️','Schneeschauer'] : ['⛈️','Gewitter'];
+async function loadWeather() {
+  if (!S.loc) return renderWeather();
+  try {
+    const u = `https://api.open-meteo.com/v1/forecast?latitude=${S.loc.lat}&longitude=${S.loc.lon}&current=temperature_2m,weather_code,wind_speed_10m,precipitation&hourly=precipitation_probability&forecast_hours=3&timezone=auto`;
+    const d = await fetch(u).then(r => r.json());
+    S.weather = { t: d.current.temperature_2m, code: d.current.weather_code, wind: d.current.wind_speed_10m, rain: d.current.precipitation,
+                  prob: Math.max(...(d.hourly?.precipitation_probability || [0])), at: Date.now() };
+    save();
+  } catch { /* offline: letzten Stand behalten */ }
+  renderWeather(); renderToday();
+}
+function outdoorOk() {
+  const w = S.weather; if (!w) return { ok:true, why:'Kein Wetter bekannt – bei Regen nimm einfach das Training drinnen.' };
+  if (w.code >= 95) return { ok:false, why:'Gewitter – heute lieber drinnen.' };
+  if (w.rain > 0.2 || w.prob >= 60 || (w.code >= 51 && w.code <= 86)) return { ok:false, why:`Regen/Schnee wahrscheinlich (${w.prob} %) – heute drinnen.` };
+  if (w.t < -3) return { ok:false, why:`Mit ${Math.round(w.t)} °C ziemlich kalt – heute drinnen.` };
+  if (w.t > 30) return { ok:false, why:`${Math.round(w.t)} °C sind zu heiß zum Laufen – drinnen oder früh morgens raus.` };
+  if (w.wind > 45) return { ok:false, why:'Sturm – heute lieber drinnen.' };
+  return { ok:true, why:`${WMO(w.code)[1]}, ${Math.round(w.t)} °C – perfekt für draußen!` };
+}
+function renderWeather() {
+  const w = S.weather, el = $('weather');
+  if (!S.loc) return;
+  $('locRow').hidden = true; $('gpsBtn').textContent = '📍 Ort ändern';
+  if (!w) { el.innerHTML = `<span class="ico">⏳</span><div><b>${S.loc.name}</b><div class="small">Wetter wird geladen …</div></div>`; return; }
+  const [ico, txt] = WMO(w.code);
+  el.innerHTML = `<span class="ico">${ico}</span><div><b>${Math.round(w.t)} °C</b> <span class="small">${S.loc.name}</span>
+    <div class="small">${txt} · Wind ${Math.round(w.wind)} km/h · Regen ${w.prob} %</div></div>`;
+}
+$('cityBtn').onclick = async () => {
+  const q = $('city').value.trim(); if (!q) return;
+  try {
+    const d = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=1&language=de`).then(r => r.json());
+    if (!d.results?.length) { $('city').value = ''; $('city').placeholder = 'Ort nicht gefunden – nochmal?'; return; }
+    const r = d.results[0]; S.loc = { lat:r.latitude, lon:r.longitude, name:r.name }; S.weather = null; save(); loadWeather();
+  } catch { $('city').placeholder = 'Keine Verbindung'; }
+};
+$('gpsBtn').onclick = () => {
+  if (S.loc) { S.loc = null; S.weather = null; save(); $('locRow').hidden = false; $('gpsBtn').textContent = '📍 Meinen Standort verwenden';
+    $('weather').innerHTML = '<span class="ico">🌍</span><div><b>Wetter</b><div class="small">Ort festlegen.</div></div>'; renderToday(); return; }
+  navigator.geolocation?.getCurrentPosition(p => { S.loc = { lat:+p.coords.latitude.toFixed(2), lon:+p.coords.longitude.toFixed(2), name:'Dein Standort' }; save(); loadWeather(); },
+    () => { $('city').placeholder = 'Standort nicht erlaubt – Stadt eingeben'; });
+};
+
+/* ================= Heute ================= */
+let today = null;
+function renderToday() {
+  const L = currentLevel(), ok = outdoorOk();
+  const seed = +dayKey(new Date()).replace(/-/g, '');
+  const suggested = ok.ok ? 'out' : 'in';
+  const type = S.prefer?.day === dayKey(new Date()) ? S.prefer.type : suggested;
+  today = type === 'out' ? outdoorWorkout(L) : indoorWorkout(L, seed);
+  $('todayTitle').textContent = today.title;
+  $('todayPill').textContent = type === 'out' ? '☀️ Draußen' : '🏠 Drinnen';
+  $('todayPill').className = 'pill ' + type;
+  $('todayWhy').textContent = (type === suggested ? ok.why : 'Du hast das andere Training gewählt.') + ` · Stufe ${L} · ca. ${totalMin(today)} min`;
+  $('todayList').innerHTML = `<div class="small" style="margin-bottom:4px">${today.summary}</div>` + today.list.map(n => `<div class="ex"><span>${n}</span></div>`).join('');
+  $('swapBtn').textContent = type === 'out' ? '⇄ Lieber drinnen trainieren' : '⇄ Lieber nach draußen';
+  const doneToday = S.log.some(e => dayKey(new Date(e.date)) === dayKey(new Date()));
+  $('startBtn').textContent = doneToday ? '▶ Noch ein Training' : '▶ Training starten';
+  // Woche
+  const wk = weekStats()[dayKey(monday(new Date()))] || 0, T = target(L);
+  $('weekText').textContent = wk >= T ? `🎉 Wochenziel geschafft: ${wk} von ${T} Einheiten!` : `${wk} von ${T} Einheiten – noch ${T - wk} bis zum Wochenziel.`;
+  $('weekDots').innerHTML = Array.from({ length: T }, (_, i) => `<span class="${i < wk ? 'on' : ''}"></span>`).join('');
+}
+$('swapBtn').onclick = () => { S.prefer = { day: dayKey(new Date()), type: today.type === 'out' ? 'in' : 'out' }; save(); renderToday(); };
+
+/* ================= Player ================= */
+let P = null, wakeLock = null, audio = null;
+function beep(f = 880, ms = 150) {
+  try { audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    const o = audio.createOscillator(), g = audio.createGain(); o.frequency.value = f; o.connect(g); g.connect(audio.destination);
+    g.gain.setValueAtTime(.25, audio.currentTime); o.start(); o.stop(audio.currentTime + ms / 1000); } catch {}
+}
+function say(t) { try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(t); u.lang = 'de-DE'; speechSynthesis.speak(u); } catch {} }
+function showStep() {
+  const st = P.w.steps[P.i], nx = P.w.steps[P.i + 1];
+  $('pPhase').textContent = st.phase; $('pPhase').style.color = st.work ? 'var(--accent)' : 'var(--warm)';
+  $('pName').textContent = st.n; $('pTip').textContent = st.t;
+  $('pNext').textContent = nx ? 'Danach: ' + nx.n.replace(/^\S+ /, m => /\p{Emoji}/u.test(m) ? '' : m) : 'Danach: geschafft!';
+  say(st.n.replace(/[^\p{L}\p{N}\s&-]/gu, ''));
+}
+function tick() {
+  if (P.paused) return;
+  P.left--; P.done++;
+  if (P.left <= 3 && P.left > 0) beep(660, 100);
+  if (P.left <= 0) {
+    P.i++; beep(990, 300);
+    if (P.i >= P.w.steps.length) return finish(true);
+    P.left = P.w.steps[P.i].s; showStep();
+  }
+  $('pTime').textContent = P.left >= 60 ? `${Math.floor(P.left/60)}:${pad(P.left%60)}` : P.left;
+  $('pBar').style.width = (100 * P.done / P.total) + '%';
+}
+async function start() {
+  const w = today;
+  P = { w, i:0, left:w.steps[0].s, done:0, total:w.steps.reduce((s, x) => s + x.s, 0), paused:false, t:setInterval(() => tick(), 1000), started:Date.now() };
+  $('player').hidden = false; $('pPause').textContent = '⏸ Pause'; $('pTime').textContent = P.left >= 60 ? `${Math.floor(P.left/60)}:${pad(P.left%60)}` : P.left;
+  showStep(); beep();
+  try { wakeLock = await navigator.wakeLock?.request('screen'); } catch {}
+}
+function finish(complete) {
+  clearInterval(P.t); try { wakeLock?.release(); } catch {}
+  const min = Math.round(P.done / 60);
+  if (complete || min >= 10) {
+    S.log.unshift({ date:new Date().toISOString(), type:P.w.type, name:P.w.title, min: Math.max(1, min) });
+    save(); say(complete ? 'Super, geschafft!' : 'Gut gemacht!');
+  }
+  $('player').hidden = true; P = null; renderAll();
+}
+$('startBtn').onclick = start;
+$('pPause').onclick = () => { if (!P) return; P.paused = !P.paused; $('pPause').textContent = P.paused ? '▶ Weiter' : '⏸ Pause'; };
+$('pSkip').onclick = () => { if (!P) return; P.left = 1; tick(); };
+let stopArmed = 0;
+$('pStop').onclick = () => {
+  if (!P) return;
+  if (Date.now() - stopArmed > 3000) { stopArmed = Date.now(); $('pStop').textContent = P.done >= 600 ? 'Nochmal tippen: beenden & speichern' : 'Nochmal tippen: abbrechen (unter 10 min wird nicht gespeichert)'; setTimeout(() => $('pStop').textContent = '✕ Beenden', 3000); return; }
+  $('pStop').textContent = '✕ Beenden'; finish(false);
+};
+
+/* ================= Statistik & Herausforderungen ================= */
+function dayStreak() {
+  const days = new Set(S.log.map(e => dayKey(new Date(e.date)))); let n = 0; const d = new Date();
+  if (!days.has(dayKey(d))) d.setDate(d.getDate() - 1);
+  while (days.has(dayKey(d))) { n++; d.setDate(d.getDate() - 1); }
+  return n;
+}
+function weekStreak() {
+  // Wochen in Folge mit Wochenziel (aktuelle Woche zählt, sobald erreicht)
+  const weeks = weekStats(); let n = 0, L = currentLevel(); const d = monday(new Date());
+  if ((weeks[dayKey(d)] || 0) < target(L)) d.setDate(d.getDate() - 7);
+  while ((weeks[dayKey(d)] || 0) >= 3) { n++; d.setDate(d.getDate() - 7); }
+  return n;
+}
+const BADGES = [
+  ['👟','Erster Schritt', () => S.log.length >= 1],
+  ['🔥','3 Tage am Stück', () => bestDayStreak() >= 3],
+  ['⚡','7 Tage am Stück', () => bestDayStreak() >= 7],
+  ['🔟','10 Einheiten', () => S.log.length >= 10],
+  ['🏅','25 Einheiten', () => S.log.length >= 25],
+  ['💯','100 Einheiten', () => S.log.length >= 100],
+  ['⏱️','300 Minuten', () => sumMin() >= 300],
+  ['🕐','1000 Minuten', () => sumMin() >= 1000],
+  ['🌤️','5× draußen', () => S.log.filter(e => e.type === 'out').length >= 5],
+  ['🏠','5× drinnen', () => S.log.filter(e => e.type === 'in').length >= 5],
+  ['📅','4 Wochen Ziel', () => weekStreak() >= 4],
+  ['🚀','Stufe 5 erreicht', () => currentLevel() >= 5],
+  ['🏆','Stufe 8 erreicht', () => currentLevel() >= 8],
+  ['🌅','Vor 8 Uhr trainiert', () => S.log.some(e => new Date(e.date).getHours() < 8)],
+  ['🌧️','Trotz Wetter drin', () => S.log.some(e => e.type === 'in') && S.log.some(e => e.type === 'out')],
+];
+const sumMin = () => S.log.reduce((s, e) => s + e.min, 0);
+function bestDayStreak() {
+  const days = [...new Set(S.log.map(e => dayKey(new Date(e.date))))].sort(); let best = 0, cur = 0, prev = null;
+  days.forEach(k => { const d = new Date(k + 'T12:00'); cur = prev && (d - prev) / 864e5 < 1.5 ? cur + 1 : 1; best = Math.max(best, cur); prev = d; });
+  return best;
+}
+function renderStats() {
+  $('sWeeks').textContent = weekStreak(); $('sDays').textContent = dayStreak(); $('sCount').textContent = S.log.length;
+  $('sMin').textContent = sumMin(); $('sOut').textContent = S.log.filter(e => e.type === 'out').length; $('sIn').textContent = S.log.filter(e => e.type === 'in').length;
+  const days = []; for (let i = 6; i >= 0; i--) { const d = new Date(); d.setDate(d.getDate() - i); days.push(d); }
+  const per = days.map(d => S.log.filter(e => dayKey(new Date(e.date)) === dayKey(d)).reduce((s, e) => s + e.min, 0));
+  const max = Math.max(30, ...per);
+  $('bars').innerHTML = days.map((d, i) => `<div><span>${per[i] || ''}</span><i style="height:${per[i] / max * 70}px"></i><span>${d.toLocaleDateString('de-DE', { weekday:'short' }).slice(0,2)}</span></div>`).join('');
+  $('badges').innerHTML = BADGES.map(([e, n, f]) => `<div class="badge ${f() ? '' : 'locked'}"><span class="e">${e}</span>${n}</div>`).join('');
+  $('log').innerHTML = S.log.length ? S.log.slice(0, 40).map((e, i) => {
+    const d = new Date(e.date);
+    return `<li><span>${e.type === 'out' ? '☀️' : '🏠'} ${e.name}<br><span class="small">${d.toLocaleDateString('de-DE', { weekday:'short', day:'2-digit', month:'2-digit' })} ${pad(d.getHours())}:${pad(d.getMinutes())}</span></span>
+      <span style="text-align:right"><b>${e.min} min</b><br><button data-del="${i}" style="background:none;border:none;color:var(--muted);padding:4px">🗑️</button></span></li>`;
+  }).join('') : '<li class="small">Noch nichts eingetragen – starte dein erstes Training!</li>';
+  document.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
+    if (b.dataset.armed) { S.log.splice(+b.dataset.del, 1); save(); renderAll(); return; }
+    b.dataset.armed = 1; b.textContent = 'Löschen?'; setTimeout(() => { delete b.dataset.armed; b.textContent = '🗑️'; }, 3000);
+  });
+}
+function renderPlan() {
+  const L = currentLevel(), ow = outdoorWorkout(L), iw = indoorWorkout(L, 1);
+  const wk = weekStats()[dayKey(monday(new Date()))] || 0;
+  $('levelTitle').textContent = `Stufe ${L} von ${MAX_LEVEL}`;
+  $('levelText').innerHTML = `Wochenziel: <b>${target(L)} Einheiten</b> (diese Woche: ${wk}).<br>Draußen: ${ow.summary}.<br>Drinnen: ${iw.summary}.` +
+    (L < MAX_LEVEL ? '<br><br>Schaffst du das Wochenziel, geht es nächste Woche eine Stufe höher.' : '<br><br>Höchste Stufe – jetzt heißt es dranbleiben! 💪');
+  $('levels').innerHTML = Array.from({ length: MAX_LEVEL }, (_, i) => {
+    const l = i + 1, o = outdoorWorkout(l);
+    return `<li style="${l === L ? 'color:var(--accent);font-weight:700' : l < L ? 'opacity:.5' : ''}"><span>${l < L ? '✅' : l === L ? '👉' : '⬜'} Stufe ${l}</span><span class="small" style="text-align:right">${target(l)}×/Woche · ${o.summary}</span></li>`;
+  }).join('');
+}
+
+/* ================= Eintragen ================= */
+$('addBtn').onclick = () => {
+  const [type, name] = $('addType').value.split('|'), min = Math.max(1, Math.min(600, +$('addMin').value || 0));
+  S.log.unshift({ date:new Date().toISOString(), type, name, min }); save(); renderAll();
+  $('addMsg').textContent = `✅ ${name}, ${min} min gespeichert.`;
+};
+let resetArmed = 0;
+$('resetBtn').onclick = () => {
+  if (Date.now() - resetArmed > 3000) { resetArmed = Date.now(); $('resetBtn').textContent = 'Wirklich? Nochmal tippen'; setTimeout(() => $('resetBtn').textContent = 'Alle Daten löschen', 3000); return; }
+  S.log = []; save(); $('resetBtn').textContent = 'Alle Daten löschen'; renderAll();
+};
+
+/* ================= Navigation ================= */
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('nav button').forEach(x => x.classList.toggle('active', x === b));
+  document.querySelectorAll('main section').forEach(s => s.hidden = s.id !== 'tab-' + b.dataset.tab);
+  scrollTo(0, 0);
+});
+function renderAll() { renderToday(); renderStats(); renderPlan(); }
+
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
+renderWeather(); renderAll();
+if (S.loc && (!S.weather || Date.now() - S.weather.at > 30 * 60e3)) loadWeather();
+</script>
+</body>
+</html>

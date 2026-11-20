@@ -134,6 +134,7 @@
   </div>
   <div class="card">
     <h2>Alle Übungen</h2>
+    <div class="small" id="exCount" style="margin-bottom:10px"></div>
     <div class="gallery" id="gallery"></div>
   </div>
   <div class="card">
@@ -217,13 +218,14 @@
     <button class="btn sec" id="pPause">⏸ Pause</button>
     <button class="btn sec" id="pSkip">⏭ Weiter</button>
   </div>
+  <button class="btn sec" id="pAvoid" style="margin-top:10px;max-width:400px">👎 Tut mir nicht gut</button>
   <button class="btn sec" id="pStop" style="margin-top:10px;max-width:400px">✕ Beenden</button>
 </div>
 
 <script>
 /* ================= Daten ================= */
 const KEY = 'sport-v1';
-let S = { loc: null, log: [], weather: null, prefer: null };
+let S = { loc: null, log: [], weather: null, prefer: null, avoid: {} };
 try { Object.assign(S, JSON.parse(localStorage.getItem(KEY)) || {}); } catch {}
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch {} };
 const $ = id => document.getElementById(id);
@@ -244,6 +246,9 @@ const EX = [
   { n:'Wandsitzen', a:'wallsit', t:'Rücken an die Wand, nur so tief, wie es für die Knie angenehm ist. Halten.' },
   { n:'Seitstütz auf den Knien', a:'sideplank', t:'Auf Unterarm und Knien seitlich stützen, Hüfte heben. Halbzeit Seite wechseln.' },
   { n:'Marschieren im Stand', a:'knees', t:'Ohne Springen auf der Stelle gehen, Knie bis maximal Hüfthöhe, aufrecht bleiben.' },
+  { n:'Beckenkippen', a:'pelvic', t:'Rückenlage, Knie angewinkelt. Unteren Rücken sanft in den Boden drücken, lösen. Ruhig atmen.' },
+  { n:'Seitliches Beinheben', a:'sideleg', t:'Auf der Seite liegen, Kopf abstützen. Oberes Bein gestreckt langsam heben und senken. Halbzeit Seite wechseln.' },
+  { n:'Schulterblätter zusammenziehen', a:'scap', t:'Aufrecht stehen, Arme wie ein W. Schulterblätter nach hinten-unten ziehen, kurz halten. Gut gegen Rundrücken.' },
   { n:'Wadenheben', a:'calf', t:'Aufrecht stehen, langsam auf die Zehenspitzen und wieder ab. Gern an der Wand festhalten.' },
 ];
 
@@ -282,6 +287,12 @@ const ANIM = {
                            [42,18, 46,27, 50,52, 38,16, 32,6, 46,14, 38,4, 46,71, 45,90, 54,71, 55,90]] },
   brisk:     { ms:750, f:[[53,16, 52,26, 50,52, 45,38, 40,47, 57,37, 63,44, 57,71, 59,90, 45,71, 40,89],
                            [53,16, 52,26, 50,52, 57,37, 63,44, 45,38, 40,47, 45,71, 40,89, 57,71, 59,90]] },
+  pelvic:    { ms:2600, f:[[13,82, 21,85, 50,87, 33,88, 45,88, 33,88, 45,88, 62,70, 72,90, 63,70, 73,90],
+                           [13,82, 21,85, 50,85, 33,88, 45,88, 33,88, 45,88, 62,68, 72,90, 63,68, 73,90]] },
+  sideleg:   { ms:2400, f:[[12,79, 20,84, 52,86, 13,88, 8,80, 36,80, 46,85, 70,88, 88,89, 70,87, 88,88],
+                           [12,79, 20,84, 52,86, 13,88, 8,80, 36,80, 46,85, 70,88, 88,89, 69,79, 86,71]] },
+  scap:      { ms:2600, f:[[50,16, 50,26, 50,52, 41,37, 38,25, 59,37, 62,25, 46,71, 45,90, 54,71, 55,90],
+                           [50,15, 50,25, 50,52, 38,39, 31,28, 62,39, 69,28, 46,71, 45,90, 54,71, 55,90]] },
   stepjack:  { ms:1400, f:[STAND_F, [50,16, 50,26, 50,52, 41,16, 36,4, 59,16, 64,4, 42,70, 34,89, 54,71, 55,90]] },
   wallpush:  { ms:2000, wall:'R', f:[[59,22, 57,32, 46,58, 66,33, 74,34, 66,34, 74,35, 43,74, 39,90, 42,74, 38,90],
                            [64,26, 63,35, 49,59, 64,46, 74,34, 64,47, 74,35, 44,74, 39,90, 43,74, 38,90]] },
@@ -320,9 +331,12 @@ const GOALS = [90, 110, 130, 150, 180, 210, 250, 300]; // Wochenziel in Minuten 
 const target = L => GOALS[L - 1];
 function indoorWorkout(L, seed) {
   const work = Math.min(50, 25 + L * 3), rest = Math.max(12, 32 - L * 2), rounds = L <= 2 ? 2 : L <= 5 ? 3 : 4;
-  const rnd = mulberry(seed); const pool = [...EX]; const ex = [];
-  ex.push(pool.splice(0, 1)[0]); // immer Hampelmann zuerst als Aufwärmen
-  while (ex.length < 6) ex.push(pool.splice(Math.floor(rnd() * pool.length), 1)[0]);
+  // Abwechslung: ausgeschlossene Übungen weglassen, Übungen vom letzten Training nach hinten stellen
+  const rnd = mulberry(seed), avoid = S.avoid || {}, last = (S.log.find(e => e.ex) || {}).ex || [];
+  const ok = EX.filter(e => !avoid[e.n]);
+  const shuffle = arr => arr.map(e => [rnd(), e]).sort((a, b) => a[0] - b[0]).map(x => x[1]);
+  const ex = [...shuffle(ok.filter(e => !last.includes(e.n))), ...shuffle(ok.filter(e => last.includes(e.n)))].slice(0, 6);
+  const warm = ex.findIndex(e => e.a === 'stepjack' || e.a === 'knees'); if (warm > 0) ex.unshift(ex.splice(warm, 1)[0]);
   const steps = [{ phase:'Aufwärmen', n:'Auf der Stelle gehen & Arme kreisen', t:'Ganz locker anfangen.', s:120, a:'walk' }];
   for (let r = 1; r <= rounds; r++) ex.forEach((e, i) => {
     steps.push({ phase:`Runde ${r}/${rounds}`, n:e.n, t:e.t, s:work, work:true, a:e.a });
@@ -446,6 +460,7 @@ function showStep() {
   $('pPhase').textContent = st.phase; $('pPhase').style.color = st.work ? 'var(--accent)' : 'var(--warm)';
   $('pName').textContent = st.n; $('pFig').dataset.anim = st.a || 'pause'; $('pTip').textContent = st.t;
   $('pNext').textContent = nx ? 'Danach: ' + nx.n.replace(/^\S+ /, m => /\p{Emoji}/u.test(m) ? '' : m) : 'Danach: geschafft!';
+  updAvoidBtn();
   say(st.n.replace(/[^\p{L}\p{N}\s&-]/gu, ''));
 }
 function tick() {
@@ -471,7 +486,7 @@ function finish(complete) {
   clearInterval(P.t); try { wakeLock?.release(); } catch {}
   const min = Math.round(P.done / 60);
   if (complete || min >= 10) {
-    S.log.unshift({ date:new Date().toISOString(), type:P.w.type, name:P.w.title, min: Math.max(1, min) });
+    S.log.unshift({ date:new Date().toISOString(), type:P.w.type, name:P.w.title, min: Math.max(1, min), ...(P.w.type === 'in' ? { ex: P.w.list.map(x => x.n) } : {}) });
     save(); say(complete ? 'Super, geschafft!' : 'Gut gemacht!');
   }
   $('player').hidden = true; P = null; renderAll();
@@ -479,6 +494,24 @@ function finish(complete) {
 $('startBtn').onclick = start;
 $('pPause').onclick = () => { if (!P) return; P.paused = !P.paused; $('pPause').textContent = P.paused ? '▶ Weiter' : '⏸ Pause'; };
 $('pSkip').onclick = () => { if (!P) return; P.left = 1; tick(); };
+let avoidArmed = 0;
+$('pAvoid').onclick = () => {
+  if (!P) return; const st = P.w.steps[P.i];
+  if (!st.work || !EX.some(e => e.n === st.n)) return;
+  if (Date.now() - avoidArmed > 3000) { avoidArmed = Date.now(); $('pAvoid').textContent = `Nochmal tippen: „${st.n}“ nicht mehr vorschlagen`; setTimeout(() => updAvoidBtn(), 3000); return; }
+  avoidArmed = 0; S.avoid = S.avoid || {}; S.avoid[st.n] = new Date().toISOString(); save();
+  // diese Übung (und die Pause davor) aus dem Rest des Trainings entfernen
+  const rest = P.w.steps.slice(P.i + 1), keep = [];
+  rest.forEach((x, i) => { if (x.n === st.n) { if (keep.length && keep[keep.length - 1].phase === 'Pause') keep.pop(); return; } keep.push(x); });
+  P.w.steps = P.w.steps.slice(0, P.i + 1).concat(keep);
+  P.total = P.done + P.left + keep.reduce((a, x) => a + x.s, 0);
+  P.left = 1; tick(); renderGallery();
+};
+function updAvoidBtn() {
+  const st = P && P.w.steps[P.i];
+  $('pAvoid').textContent = '👎 Tut mir nicht gut';
+  $('pAvoid').hidden = !(st && st.work && EX.some(e => e.n === st.n));
+}
 let stopArmed = 0;
 $('pStop').onclick = () => {
   if (!P) return;
@@ -572,7 +605,20 @@ document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
   scrollTo(0, 0);
 });
 function renderAll() { renderToday(); renderStats(); renderPlan(); }
-$('gallery').innerHTML = EX.map(e => `<div>${figSvg(e.a)}<b>${e.n}</b><p>${e.t}</p></div>`).join('');
+function renderGallery() {
+  const av = S.avoid || {};
+  const n = EX.filter(e => !av[e.n]).length;
+  $('exCount').textContent = `${n} von ${EX.length} Übungen aktiv` + (n < 6 ? ' – Trainings werden kürzer, weil weniger Übungen übrig sind.' : '. Jedes Training nimmt 6 davon, möglichst andere als beim letzten Mal.');
+  $('gallery').innerHTML = EX.map((e, i) => `<div style="${av[e.n] ? 'opacity:.45' : ''}">${figSvg(e.a)}<b>${e.n}</b><p>${e.t}</p>
+    <button class="btn sec" data-ex="${i}" style="margin-top:6px;padding:8px;font-size:.8rem">${av[e.n] ? '↩ Wieder aufnehmen' : '👎 Tut mir nicht gut'}</button></div>`).join('');
+  document.querySelectorAll('[data-ex]').forEach(b => b.onclick = () => {
+    const e = EX[+b.dataset.ex];
+    if (av[e.n]) { delete S.avoid[e.n]; save(); renderGallery(); renderToday(); return; }
+    if (!b.dataset.armed) { b.dataset.armed = 1; b.textContent = 'Sicher? Nochmal tippen'; setTimeout(() => { if (b.isConnected) { delete b.dataset.armed; b.textContent = '👎 Tut mir nicht gut'; } }, 3000); return; }
+    S.avoid = S.avoid || {}; S.avoid[e.n] = new Date().toISOString(); save(); renderGallery(); renderToday();
+  });
+}
+renderGallery();
 
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
 renderWeather(); renderAll();
